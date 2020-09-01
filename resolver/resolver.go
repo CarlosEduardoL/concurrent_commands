@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/CarlosEduardoL/thread_commands/structures"
+	"github.com/CarlosEduardoL/concurrent_commands/structures"
 )
 
 //NoValidError is a not valid path
@@ -58,15 +58,16 @@ func ResolvePATH(path string) (string, error) {
 	return finalPath, NoValidError{}
 }
 
-func DirToStack(dir string) (structures.Stack, int64) {
-	stack := structures.NewStack()
+func DirToStack(dir string) (files structures.Stack, folders structures.Stack, size int64) {
+	files = structures.NewStack()
+	folders = structures.NewStack()
 
-	size := dirToStack(dir, stack)
+	size = dirToStack(dir, files, folders)
 
-	return stack, size
+	return
 }
 
-func dirToStack(dir string, stack structures.Stack) int64 {
+func dirToStack(dir string, stack structures.Stack, folders structures.Stack) int64 {
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		log.Fatal(err)
@@ -74,11 +75,11 @@ func dirToStack(dir string, stack structures.Stack) int64 {
 
 	var size int64
 
-	//stack.Push(dir)
+	folders.Push(dir)
 
 	for _, f := range files {
 		if f.IsDir() {
-			size += dirToStack(fmt.Sprintf("%s%s%s", dir, "\\", f.Name()), stack)
+			size += dirToStack(fmt.Sprintf("%s%s%s", dir, "\\", f.Name()), stack, folders)
 		} else {
 			stack.Push(fmt.Sprintf("%s%s%s", dir, "\\", f.Name()))
 			size += f.Size()

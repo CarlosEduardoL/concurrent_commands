@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/CarlosEduardoL/thread_commands/resolver"
+	"github.com/CarlosEduardoL/concurrent_commands/resolver"
 	"github.com/vbauerster/mpb"
 	"github.com/vbauerster/mpb/decor"
 )
@@ -23,7 +23,7 @@ func main() {
 		fmt.Println(fmt.Errorf("Invalid Path %s", path))
 		return
 	}
-	items, size := resolver.DirToStack(path)
+	items, folders, size := resolver.DirToStack(path)
 	cpuNumber := runtime.NumCPU()
 
 	var total int64 = size
@@ -62,6 +62,17 @@ func main() {
 					fmt.Printf("error on %s\nerror:%s", element, err)
 				}
 				chanel <- info.Size()
+			}
+			for {
+				folder, err := folders.Pop()
+				if err != nil {
+					return
+				}
+				err = os.Remove(folder)
+
+				if err != nil {
+					fmt.Printf("error on %s\nerror:%s", folder, err)
+				}
 			}
 
 		}()
