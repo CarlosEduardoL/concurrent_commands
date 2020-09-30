@@ -1,90 +1,53 @@
 package resolver
 
 import (
-	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
-	"runtime"
-	"strings"
+	"sync"
 
-	"github.com/CarlosEduardoL/concurrent_commands/structures"
+	"github.com/CarlosEduardoL/concurrent_commands/walker"
+
+	"github.com/CarlosEduardoL/concurrent_commands/model"
 )
 
-//NoValidError is a not valid path
-type NoValidError struct {
-}
-
-func (NoValidError) Error() string {
-	return "Not valid Path"
-}
-
-//ResolvePATH return the path to the file or error
-func ResolvePATH(path string) (string, error) {
-	var finalPath string
-	currentPath, err := getCurrentDir()
-	if runtime.GOOS == "windows" {
-		if strings.HasPrefix(path, ".\\") {
-			if err != nil {
-				return "", err
-			}
-			finalPath = strings.Replace(path, ".", currentPath, 1)
-		} else if path == "." {
-			if err != nil {
-				return "", err
-			}
-			finalPath = strings.Replace(path, ".", fmt.Sprintf("%s%s", currentPath, "\\"), 1)
-		} else {
-			finalPath = path
-		}
-	} else {
-		if strings.HasPrefix(path, "./") {
-			if err != nil {
-				return "", err
-			}
-			finalPath = strings.Replace(path, ".", currentPath, 1)
-		} else if path == "." {
-			if err != nil {
-				return "", err
-			}
-			finalPath = strings.Replace(path, ".", fmt.Sprintf("%s%s", currentPath, "/"), 1)
-		} else {
-			finalPath = path
-		}
-	}
-	if isValid(finalPath) {
-		return finalPath, nil
-	}
-	return finalPath, NoValidError{}
-}
-
-func DirToStack(dir string) (files structures.Stack, folders structures.Stack, size int64) {
-	files = structures.NewStack()
-	folders = structures.NewStack()
+func DirToStack(dir string) (files model.FileStack, folders model.Stack, size int64) {
+	files = model.NewFileStack()
+	folders = model.NewStack()
 
 	size = dirToStack(dir, files, folders)
 
 	return
 }
 
-func dirToStack(dir string, stack structures.Stack, folders structures.Stack) int64 {
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		log.Fatal(err)
-	}
+func dirToStack(dir string, stack model.FileStack, folders model.Stack) int64 {
+
+	wg := sync.WaitGroup{}
+
+	wg.Add(2)
+
+	files := make(chan model.File, 8)
+	foldersChan := make(chan string, 8)
+
+	walker.Walk(dir, files, foldersChan)
 
 	var size int64
 
-	folders.Push(dir)
-
-	for _, f := range files {
-		if f.IsDir() {
-			size += dirToStack(fmt.Sprintf("%s%s%s", dir, "\\", f.Name()), stack, folders)
-		} else {
-			stack.Push(fmt.Sprintf("%s%s%s", dir, "\\", f.Name()))
-			size += f.Size()
+	go func() {
+		for file := range files {
+			stack.Push(file)
+			size += file.Size()
 		}
-	}
+		wg.Done()
+	}()
+
+	go func() {
+		for file := range files {
+			stack.Push(file)
+			size += file.Size()
+		}
+		wg.Done()
+	}()
+
+	wg.Wait()
 	return size
 }
 
@@ -93,12 +56,4 @@ func isValid(fp string) bool {
 		return info.IsDir()
 	}
 	return false
-}
-
-func getCurrentDir() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	return dir, nil
 }
